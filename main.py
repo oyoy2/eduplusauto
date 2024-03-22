@@ -12,11 +12,13 @@ import load
 import login
 import requests
 
+
 def save_credentials(account, password):
     credentials = {'account': account, 'password': password}
     with open('credentials.pkl', 'wb') as file:
         pickle.dump(credentials, file)
     print("账号信息已保存。")
+
 
 def load_credentials():
     try:
@@ -25,6 +27,8 @@ def load_credentials():
         return credentials['account'], credentials['password']
     except FileNotFoundError:
         return None, None
+
+
 def get_user_info(cookies):
     user_url = 'https://www.eduplus.net/athena_api/portal/users/name_avatar'
     response = requests.get(user_url, cookies=cookies)
@@ -125,6 +129,7 @@ if __name__ == '__main__':
     options = webdriver.ChromeOptions()
     options.add_experimental_option('detach', True)
     driver = webdriver.Chrome(options=options)
+    options.add_argument('--ignore-certificate-errors')
     print('项目地址：https://github.com/oyoy2/eduplusauto')
     print('加载浏览器并最小化')
     driver.minimize_window()
@@ -165,8 +170,6 @@ if __name__ == '__main__':
                 print('正在执行的课程：' + detail['name'])
                 register_resource(driver, detail['resourceId'], courses[chose]['id'])
                 if detail['type'] == 'Video':
-                    waiting_time = get_time(detail['id'], cookies)
-                    print('等待时间：' + str(waiting_time))
                     print('开始查找视频')
                     video_element = WebDriverWait(driver, 10).until(
                         EC.visibility_of_element_located((By.CSS_SELECTOR, '#videoPlayer video'))
@@ -184,20 +187,20 @@ if __name__ == '__main__':
                                     }
                                     """
                     driver.execute_script(mute_and_play_script, video_element)
-                    if waiting_time > 0:
+                    total_video_duration = driver.execute_script("return arguments[0].duration;", video_element)
+                    last_reported_time = 0
+                    current_time = driver.execute_script("return arguments[0].currentTime;", video_element)
+                    progress_bar = tqdm(total=int(total_video_duration) - int(current_time), desc='视频播放进度')
+                    if total_video_duration > 0:
                         try:
-                            total_video_duration = driver.execute_script("return arguments[0].duration;", video_element)
-                            last_reported_time = 0
-                            current_time = driver.execute_script("return arguments[0].currentTime;", video_element)
-                            progress_bar = tqdm(total=int(waiting_time) - int(current_time), desc='视频播放进度')
 
                             while True:
                                 current_time = driver.execute_script("return arguments[0].currentTime;", video_element)
-
                                 if current_time >= last_reported_time + 1:
                                     percentage = int((current_time / total_video_duration) * 100)  # 计算百分比
                                     progress_bar.set_postfix(
-                                        {'current_time': int(current_time), 'percentage': str(percentage) + '%'})
+                                        {'current_time': int(current_time), 'percentage': str(percentage) + '%'},
+                                        end='\r')
                                     last_reported_time = current_time
                                     progress_bar.update(1)
                                     time.sleep(1)
@@ -221,4 +224,3 @@ if __name__ == '__main__':
             print('输入错误')
     else:
         print('输入错误')
-
